@@ -11,8 +11,8 @@
 #  3) With lamda_star, solve the ODE
 #      lamda*(1/eta)*(d/d_eta)*(eta*d_phi/d_eta) + 
 #        lamda^2*(1-eta^2)*phi = 0
-#     Iterate until |phi-phi_star| <= epsilon
-#  4) theta = lamda * phi
+#  4) Iterate until |phi-phi_star| <= epsilon
+#  5) theta = lamda * phi
 #     theta(r=R) = theta_wall
 #     Nu = 2*theta_wall/(1-theta_wall)*Bi
 
@@ -38,8 +38,8 @@ def residual(a,b):
 
 def sourceTerm(eta, lamda):
 	'Linearize the source term S into S_C + S_P*theta'
-	S_C = np.full(len(eta), 0, float)
-	S_P = lamda*(1-np.square(eta))
+	S_P = np.full(len(eta), 0, float)
+	S_C = lamda*(1-np.square(eta))
 	return S_C, S_P
 
 def coefficients(eta, d_eta, Bi, S_C, S_P):
@@ -54,21 +54,19 @@ def coefficients(eta, d_eta, Bi, S_C, S_P):
 		# A[i][i++] is like aE
 		if i == 0:
 			# symmetric BC
-			A[i][i+1] = -1 * 2*(eta[i]+d_eta/2)/d_eta # 2* because aW=aE and TW=TE
-			A[i][i] = -1*A[i][i+1] - S_P[i]*eta[i]*d_eta/2
+			A[i][i+1] = 2*(eta[i]+d_eta/2)/d_eta # 2* because aW=aE and TW=TE
+			A[i][i] = -1*(A[i][i+1] - S_P[i]*eta[i]*d_eta/2)
 			b[i] = S_C[i]*eta[i]*d_eta/2
 		elif i == N-1:
 			# wall heat flux BC
-			A[i][i-1] = -1 * (eta[i]-d_eta/2)/d_eta
-			A[i][i] = -1*A[i][i-1] - S_P[i]*eta[i]*d_eta/2 + Bi 
+			A[i][i-1] = 1*(eta[i]-d_eta/2)/d_eta
+			A[i][i] = -1*(A[i][i-1] - S_P[i]*eta[i]*d_eta/2 + Bi)
 			b[i] = S_C[i]*eta[i]*d_eta/2 + 0 # 0 for h_e*T_inf ... when its nondimensionalized, T_inf => theta = 0. not sure if this is correct
 		else:
-			A[i][i-1] = -1 * (eta[i]-d_eta/2)/d_eta
-			A[i][i+1] = -1 * (eta[i]+d_eta/2)/d_eta
-			A[i][i] = -1*A[i][i-1] - A[i][i+1] - S_P[i]*eta[i]*d_eta/2
+			A[i][i-1] = 1*(eta[i]-d_eta/2)/d_eta
+			A[i][i+1] = 1*(eta[i]+d_eta/2)/d_eta
+			A[i][i] = -1*(A[i][i-1] + A[i][i+1] - S_P[i]*eta[i]*d_eta/2)
 			b[i] = S_C[i]*eta[i]*d_eta/2
-
-
 	return A, b
 
 def solve_lamda(eta, phi):
@@ -77,11 +75,11 @@ def solve_lamda(eta, phi):
 	print "solving lamda.."
 	print "y="+str(y)
 	print "lamda="+str(lamda)
-	return lamda
+	return -1*lamda
 
 if __name__ == '__main__':
 	#setup grid
-	N = 20
+	N = 50
 	eta = np.linspace(0, 1, N, True)
 	d_eta = eta[1]-eta[0]
 	print "NEW RUN"
@@ -91,7 +89,7 @@ if __name__ == '__main__':
 	Bi = 1
 	phi = np.ones(N)
 
-	epsilon = 1e-4
+	epsilon = 1e-5
 	res = epsilon + 1
 	while res > epsilon:
 		phi_star = phi
@@ -102,7 +100,8 @@ if __name__ == '__main__':
 		A, b = coefficients(eta, d_eta, Bi, S_C, S_P)
 		print "A="+str(A)
 		print "b="+str(b)
-		phi = gauss(A, b, phi_star)
+		phi = gauss(A, b, phi_star, 1e-5)
+
 		res = residual(phi, phi_star)
 		print "theta="+str(lamda*phi)
 		print "res="+str(res)
