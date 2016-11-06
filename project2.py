@@ -17,57 +17,100 @@
 #     Nu = 2*theta_wall/(1-theta_wall)*Bi
 
 import numpy as np
+import matplotlib.pyplot as plt
+
+def gauss(A, b, x, epsilon = 1e-4):
+	'Run n iterations to solve Ax=b using Gauss-Sidel'
+	# thanks http://austingwalters.com/gauss-seidel-method/
+	L = np.tril(A)
+	U = A - L
+
+	res = epsilon + 1
+	while res > epsilon:
+		x_star = x # initial guess
+		x = np.dot(np.linalg.inv(L), b - np.dot(U, x_star))
+		res = residual(x, x_star)
+
+	return x
+
+def residual(a,b):
+	return np.sum(np.absolute(a - b))
+
+def sourceTerm(eta, lamda):
+	'Linearize the source term S into S_C + S_P*theta'
+	S_C = np.full(len(eta), 0, float)
+	S_P = lamda*(1-np.square(eta))
+	return S_C, S_P
+
+def coefficients(eta, d_eta, Bi, S_C, S_P):
+	'Returns the coefficients to solve a_P*T_P = a_E*T_E + a_W*T_W + b'
+	N = len(eta)
+	A = np.zeros(N**2).reshape(N, N)
+	b = np.zeros(N)
+
+	for i in range(len(eta)):
+		# A[i][i] is like aP
+		# A[i][i-1] is like aW
+		# A[i][i++] is like aE
+		if i == 0:
+			# symmetric BC
+			A[i][i+1] = -1 * 2*(eta[i]+d_eta/2)/d_eta # 2* because aW=aE and TW=TE
+			A[i][i] = -1*A[i][i+1] - S_P[i]*eta[i]*d_eta/2
+			b[i] = S_C[i]*eta[i]*d_eta/2
+		elif i == N-1:
+			# wall heat flux BC
+			A[i][i-1] = -1 * (eta[i]-d_eta/2)/d_eta
+			A[i][i] = -1*A[i][i-1] - S_P[i]*eta[i]*d_eta/2 + Bi 
+			b[i] = S_C[i]*eta[i]*d_eta/2 + 0 # 0 for h_e*T_inf ... when its nondimensionalized, T_inf => theta = 0. not sure if this is correct
+		else:
+			A[i][i-1] = -1 * (eta[i]-d_eta/2)/d_eta
+			A[i][i+1] = -1 * (eta[i]+d_eta/2)/d_eta
+			A[i][i] = -1*A[i][i-1] - A[i][i+1] - S_P[i]*eta[i]*d_eta/2
+			b[i] = S_C[i]*eta[i]*d_eta/2
 
 
-def SOR(A, b, alpha = .66, epsilon = 1e-4):
-	'Solves Ax=b for x using Gauss-Sidel Successive Over Relaxation'
-	residual = 1
-	while residual > epsilon:
-		for i in range(0, len(A)):
-			var = 1
-
+	return A, b
 
 def solve_lamda(eta, phi):
-	print "running solve_lamda"
 	y = phi*eta*(1-np.square(eta))
-	print "y="+str(y)
-	print "eta="+str(eta)
 	lamda = 1./4.*1./np.trapz(y, eta)
+	print "solving lamda.."
+	print "y="+str(y)
 	print "lamda="+str(lamda)
 	return lamda
 
-def solve_phi(eta, lamda, phi, epsilon = 1e-4):
-	phi_star = phi
-	residual = 1
-	while residual > epsilon:
-		aP = np.square(lamda)*(1-np.square(eta)) - 2*lamda/np.square(d_eta)
-		aE = np.full(len(eta), -lamda/(4*d_eta) - lamda/np.square(d_eta))
-		aW = np.full(len(eta), lamda/(4*d_eta) - lamda/np.square(d_eta))
-		print aP
-		print aE
-		print aW
-		for i in range(len(phi)):
-			if i == 0:
-				# symmetrical BC
-				phi_star[i] = 5.
-			elif i == len(phi)-1:
-				# wall BC
-				phi_star[i] = 10.
-			else:
-				#phi[i] = (aE[i]*phi[i+1] + aW[i]*phi[i-1] + b[i])/aP[i]
-				# GS method, use latest (phi_star) for already calculated [i-1]
-				phi_star[i] = aE[i]/aP[i]*phi[i+1] + aW[i]/aP[i]*phi_star[i-1]
-		print phi-phi_star
-		residual = np.sum(np.absolute(phi - phi_star))
-		print "residual="+str(residual)
-		phi = phi_star
-	return phi
-
 if __name__ == '__main__':
-	N = 4
+	#setup grid
+	N = 20
 	eta = np.linspace(0, 1, N, True)
 	d_eta = eta[1]-eta[0]
-	phi = np.ones(N)
-	lamda = solve_lamda(eta, phi)
-	phi = solve_phi(eta, lamda, phi)
+	print "NEW RUN"
+	print "eta="+str(eta)
+	print "d_eta="+str(d_eta)
 
+	Bi = 1
+	phi = np.ones(N)
+
+	epsilon = 1e-4
+	res = epsilon + 1
+	while res > epsilon:
+		phi_star = phi
+		lamda = solve_lamda(eta, phi_star)
+		S_C, S_P = sourceTerm(eta, lamda)
+		print "S_C="+str(S_C)
+		print "S_P="+str(S_P)
+		A, b = coefficients(eta, d_eta, Bi, S_C, S_P)
+		print "A="+str(A)
+		print "b="+str(b)
+		phi = gauss(A, b, phi_star)
+		res = residual(phi, phi_star)
+		print "theta="+str(lamda*phi)
+		print "res="+str(res)
+
+	theta = lamda*phi
+	#print theta
+	
+	plt.figure(1)
+	plt.clf()
+	plt.plot(eta, theta)
+	plt.show()
