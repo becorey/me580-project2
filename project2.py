@@ -38,8 +38,8 @@ def residual(a,b):
 
 def sourceTerm(eta, lamda):
 	'Linearize the source term S into S_C + S_P*theta'
-	S_P = np.full(len(eta), 0, float)
-	S_C = lamda*(1-np.square(eta))
+	S_C = np.full(len(eta), 0, float)
+	S_P = lamda*(1-np.square(eta))
 	return S_C, S_P
 
 def coefficients(eta, d_eta, Bi, S_C, S_P):
