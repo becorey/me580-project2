@@ -61,14 +61,25 @@ def coefficients(eta, d_eta, S_C, S_P):
 		# A[i][i-1] is like aW
 		# A[i][i++] is like aE
 		if i == 0:
-			#A[i][i] = (d_eta/2)**2*S_P[i]
-			#A[i][i+1] = 0
-			#b[i] = S_C[i]*(d_eta/2)**2
-			A[i][i] = 1e-6 #needs to be small but nonzero to avoid singular matrix error
+			#symmetrical centerline
+			A[i][i+1] = 0
+			A[i][i] = (d_eta/2)**2*S_P[i] + 1e-6 #needs to be nonzero to avoid singular matrix error
+			b[i] = S_C[i]*(d_eta/2)**2
 		elif i >= N-1:
-			A[i][i] = 1/d_eta - (2-d_eta**2*Bi)
-			A[i][i-1] = 2/d_eta
-			b[i] = 0
+			#wall flux
+			#first order, given by Prof:
+			#A[i][i] = 1/d_eta - (2-d_eta**2*Bi)
+			#A[i][i-1] = -2/d_eta
+			#b[i] = 0
+			#first order, I calculated:
+			A[i][i] = (1/d_eta - 0.5 + 2*Bi - S_P[i]*d_eta**2*Bi - S_P[i]*d_eta)
+			A[i][i-1] = 0
+			A[i][i-2] = -(1/d_eta - 0.5)
+			b[i] = S_C[i]*eta[i]*d_eta
+			#second order, I calculated:
+			#A[i][i] = (-1/d_eta + d_eta*Bi*(d_eta/2+1) - 1 - S_P[i]*d_eta)
+			#A[i][i-1] = 1
+			#b[i] = S_C[i]*d_eta
 		else:
 			A[i][i] = 1*(eta[i]/d_eta + 0.5) + 1*(eta[i]/d_eta - 0.5) - S_P[i]*eta[i]*d_eta
 			A[i][i-1] = -1*(eta[i]/d_eta - 0.5)
@@ -80,12 +91,12 @@ def symmBC(nb):
 	return nb
 
 def fluxBC(nb, d_eta, Bi):
-	return nb/(1 + d_eta*Bi)
+	return nb/(1.0 + d_eta*Bi)
 
 
 if __name__ == '__main__':
 	#setup grid
-	N = 50
+	N = 80
 	eta = np.linspace(0, 1, N, True)
 	d_eta = eta[1]-eta[0]
 	print "NEW RUN"
@@ -125,7 +136,15 @@ if __name__ == '__main__':
 		print "res="+str(res)
 
 	theta = lamda*phi
-	#print theta
+	
+	print "lamda="+str(lamda) 
+	print "S_C="+str(S_C)
+	print "S_P="+str(S_P)
+	print "A="+str(A)
+	print "phi="+str(phi)
+	print "b="+str(b)
+	
+	print "theta="+str(theta)
 	
 	plt.figure(1)
 	plt.clf()
